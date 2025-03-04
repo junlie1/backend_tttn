@@ -23,15 +23,13 @@ const routeController = {
     }
   },
 
-  getRoute: async (req, res) => {
+  getRouteById: async (req, res) => {
     try {
       const { id } = req.params;
       const routeDoc = await db.collection('routes').doc(id).get();
-
       if (!routeDoc.exists) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy tuyến đường' });
       }
-
       res.status(200).json({ success: true, data: { id: routeDoc.id, ...routeDoc.data() } });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });

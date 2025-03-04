@@ -6,12 +6,16 @@ const busTypeRoutes = require('./busTypeRoutes');
 const scheduleRoutes = require('./scheduleRoutes');
 const busRoutes = require('./busRoutes');
 const seatLayoutRoutes = require('./seatLayoutRoutes');
+const paymentRoutes = require('./paymentRoutes');
+const userRoutes = require('./userRoutes');
 
 // Mount các routes
 router.use('/routes', routeRoutes);
 router.use('/bus-types', busTypeRoutes);
 router.use('/schedules', scheduleRoutes);
 router.use('/buses', busRoutes);
-router.use('/seat-layout', seatLayoutRoutes)
+router.use('/seat-layout', seatLayoutRoutes);
+router.use('/payment', paymentRoutes);
+router.use('/user', userRoutes);
 
 module.exports = router;

@@ -17,7 +17,7 @@ const busController = {
         defaultPriceFloor1,
         defaultPriceFloor2,
         seatLayout,
-        vendorId, // 🔥 Thêm vendorId
+        vendorId, 
       } = req.body;
 
       if (!busNumber || !busTypeId || !vendorId) {

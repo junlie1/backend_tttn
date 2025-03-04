@@ -4,7 +4,7 @@ const routeController = require('../controllers/routeController');
 
 router.post('/', routeController.createRoute);
 router.get('/', routeController.getRoutes);
-router.get('/:id', routeController.getRoute);
+router.get('/:id', routeController.getRouteById);
 router.put('/:id', routeController.updateRoute);
 router.delete('/:id', routeController.deleteRoute);
 
