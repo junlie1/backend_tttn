@@ -1,7 +1,5 @@
 const { db } = require('../config/firebase');
 
-// Lấy chi tiết một loại xe
-
 const seatLayoutController = {
     getSeatLayoutById: async (req, res) => {
         try {
@@ -15,7 +13,21 @@ const seatLayoutController = {
             console.error("Error fetching seat layout:", error);
             res.status(500).json({ success: false, message: "Lỗi khi lấy sơ đồ ghế" });
           }
-    }
+    },
+    createSeatlayout: async (req,res) => {
+      try {
+        const {seatLayoutData} = req.body;
+        const newSeatLayoutRef = await db.collection("seatLayouts").add(seatLayoutData);
+        return res.status(201).json(
+          {
+            id: newSeatLayoutRef.id,
+            ...seatLayoutData
+          }
+        )
+      } catch (error) {
+        console.error("Error", error);
+      }
+    },
 }
 
 module.exports = seatLayoutController;

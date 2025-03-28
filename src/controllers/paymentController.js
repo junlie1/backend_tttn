@@ -55,21 +55,22 @@ const paymentController = {
     // 🔹 **Lưu vé vào Firestore ngay tại đây**
     const formattedTicket = {
       orderId,
-      arrivalTime: updatedPaymentData.filteredSchedules.arrivalTime,
+      arrivalTime: updatedPaymentData.selectedSchedule.arrivalTime,
       bookingTime: moment().format(),
-      busId: updatedPaymentData.filteredSchedules.busId,
+      busId: updatedPaymentData.selectedSchedule.busId,
       customerName: updatedPaymentData.userData.displayName ? updatedPaymentData.userData.displayName : updatedPaymentData.userData.name,
       customerId: updatedPaymentData.userData.uid,
       customerInfo: updatedPaymentData.userData.phoneNumber,
-      departureTime: updatedPaymentData.filteredSchedules.departureTime,
-      from: updatedPaymentData.filteredSchedules.route.startPoint,
-      to: updatedPaymentData.filteredSchedules.route.endPoint,
+      departureTime: updatedPaymentData.selectedSchedule.departureTime,
+      from: updatedPaymentData.selectedSchedule.route.startPoint,
+      to: updatedPaymentData.selectedSchedule.route.endPoint,
       price: numericAmount,
       routeId: updatedPaymentData.routeId,
-      scheduleId: updatedPaymentData.filteredSchedules.id,
-      seatLayoutId: updatedPaymentData.filteredSchedules.seatLayoutId,
+      scheduleId: updatedPaymentData.selectedSchedule.id,
+      seatLayoutId: updatedPaymentData.selectedSchedule.seatLayoutId,
       seatNumber: updatedPaymentData.selectedSeats,
-      status: "pending", // 🚨 Thanh toán chưa hoàn tất
+      status: "pending", // 🚨 Thanh toán chưa hoàn tất,
+      vendorId: updatedPaymentData.selectedSchedule.vendorId
     };
 
     await db.collection("tickets").doc(orderId).set(formattedTicket);

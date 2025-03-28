@@ -48,6 +48,52 @@ const userController = {
             });
         }
     },
+
+    getUserById: async (req,res) => {
+        try {
+            const {customerId} = req.params;
+            const userSnapshot = await db.collection("users").doc(customerId).get();
+            if(!userSnapshot.exists) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Không tìm thấy người dùng"
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    id: userSnapshot.id,
+                    ...userSnapshot.data()
+                }
+            });
+        } catch (error) {
+            console.error("Error", error);
+        }
+    },
+
+    updateUserById: async (req,res) => {
+        try {
+            const {customerId} = req.params;
+            const updateData = req.body;
+            const userRef = db.collection("users").doc(customerId);
+            const userSnapshot = await userRef.get();
+            if(!userSnapshot.exists) {
+                return res.status(404).json({
+                    message: "Không tìm thấy user"
+                });
+            }
+            await userRef.update(updateData);
+
+            //Data user sau khi cập nhật
+            const updatedUserSnapshot = await userRef.get();
+            const updatedData = updatedUserSnapshot.data();
+            
+            return res.status(200).json({ success: true, message: "Cập nhật người dùng thành công.", data: updatedData });
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Lỗi khi cập nhật người dùng.", error: error.message });
+        }
+    }
 };
 
 module.exports = userController;
