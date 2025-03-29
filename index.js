@@ -4,7 +4,7 @@ const session = require('express-session');
 const routes = require('./src/routes');
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
