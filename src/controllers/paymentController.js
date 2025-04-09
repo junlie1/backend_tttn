@@ -146,7 +146,7 @@ const paymentController = {
         await ticketRef.update({ status: "booking" });
         console.log("✅ Ticket updated to 'booking'.");
 
-        redirectUrl = "https://junwoan-gotta-go.vercel.app/success";
+        redirectUrl = `https://junwoan-gotta-go.vercel.app/success?orderId=${vnp_TxnRef}`;
       }
 
       console.log("🔄 Redirecting to:", redirectUrl);
