@@ -1,19 +1,21 @@
+const { log } = require('firebase-functions/logger');
 const { db } = require('../config/firebase');
+const { format } = require('date-fns-tz');
 
 const scheduleController = {
   // Lấy danh sách lịch trình
   getSchedules: async (req, res) => {
     try {
-      
+
       const schedulesRef = db.collection('schedules');
       const snapshot = await schedulesRef.get();
-      
+
       const schedules = [];
-      
+
       // Lấy dữ liệu lịch trình và join với routes, buses và seatLayout
       for (const doc of snapshot.docs) {
         const scheduleData = { id: doc.id, ...doc.data() };
-        
+
         // Lấy thông tin tuyến đường
         if (scheduleData.routeId) {
           const routeDoc = await db.collection('routes').doc(scheduleData.routeId).get();
@@ -31,14 +33,14 @@ const scheduleController = {
             };
           }
         }
-        
+
         // Lấy thông tin xe
         if (scheduleData.busId) {
           const busDoc = await db.collection('buses').doc(scheduleData.busId).get();
           if (busDoc.exists) {
             const busData = busDoc.data();
             let busTypeName = "Unknown";
-            if(busData.busTypeId) {
+            if (busData.busTypeId) {
               const busTypeDoc = await db.collection('busTypes').doc(busData.busTypeId).get();
               const busTypeData = busTypeDoc.data();
               busTypeName = busTypeData.typeName || "Unknown";
@@ -81,10 +83,10 @@ const scheduleController = {
             console.error(`Error getting seatLayout for schedule ${scheduleData.id}:`, error);
           }
         }
-        
+
         schedules.push(scheduleData);
       }
-      
+
       res.json({
         success: true,
         data: schedules
@@ -102,7 +104,7 @@ const scheduleController = {
   getSchedule: async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       if (!id) {
         return res.status(400).json({
           success: false,
@@ -146,429 +148,245 @@ const scheduleController = {
     }
   },
 
+  getScheduleApp: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID lịch trình là bắt buộc'
+        });
+      }
+
+      const scheduleRef = db.collection('schedules').doc(id);
+      const schedule = await scheduleRef.get();
+
+      if (!schedule.exists) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy lịch trình'
+        });
+      }
+
+      const scheduleData = {
+        id: schedule.id,
+        ...schedule.data()
+      };
+
+      // Lấy thông tin tuyến đường
+      if (scheduleData.routeId) {
+        const routeDoc = await db.collection('routes').doc(scheduleData.routeId).get();
+        if (routeDoc.exists) {
+          const routeData = routeDoc.data();
+          scheduleData.route = {
+            id: routeDoc.id,
+            routeName: routeData.routeName,
+            startPoint: routeData.startPoint,
+            endPoint: routeData.endPoint,
+            distance: routeData.distance,
+            duration: routeData.duration,
+            from: routeData.from,
+            to: routeData.to
+          };
+        }
+      }
+
+      // Lấy thông tin xe
+      if (scheduleData.busId) {
+        const busDoc = await db.collection('buses').doc(scheduleData.busId).get();
+        if (busDoc.exists) {
+          const busData = busDoc.data();
+          let busTypeName = "Unknown";
+          if (busData.busTypeId) {
+            const busTypeDoc = await db.collection('busTypes').doc(busData.busTypeId).get();
+            const busTypeData = busTypeDoc.data();
+            busTypeName = busTypeData.typeName || "Unknown";
+          }
+          scheduleData.bus = {
+            id: busDoc.id,
+            busNumber: busData.busNumber,
+            manufacturer: busData.manufacturer,
+            model: busData.model,
+            status: busData.status,
+            busType: busTypeName
+          };
+        }
+      }
+
+      // Lấy thông tin seatLayout
+      if (scheduleData.seatLayoutId) {
+        const seatLayoutDoc = await db.collection('seatLayouts').doc(scheduleData.seatLayoutId).get();
+        if (seatLayoutDoc.exists) {
+          scheduleData.seatLayout = seatLayoutDoc.data();
+        }
+      } else {
+        // Nếu không có seatLayoutId, dùng defaultSeatLayout của xe nếu có
+        if (scheduleData.busId) {
+          const busDoc = await db.collection('buses').doc(scheduleData.busId).get();
+          if (busDoc.exists) {
+            const busData = busDoc.data();
+            if (busData.defaultSeatLayoutId) {
+              const defaultSeatLayoutDoc = await db.collection('seatLayouts')
+                .doc(busData.defaultSeatLayoutId)
+                .get();
+              if (defaultSeatLayoutDoc.exists) {
+                scheduleData.seatLayout = defaultSeatLayoutDoc.data();
+              }
+            }
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        data: scheduleData
+      });
+
+    } catch (error) {
+      console.error('Error getting schedule:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  },
+
+
   // Tạo lịch trình mới
-// Tạo lịch trình mới
-createSchedule: async (req, res) => {
-  try {
-    const scheduleData = req.body;
-    if (!scheduleData.routeId || !scheduleData.busId) {
-      return res.status(400).json({
-        success: false,
-        message: "routeId và busId là bắt buộc",
-      });
-    }
+  createSchedule: async (req, res) => {
+    try {
+      const scheduleData = req.body;
+      if (!scheduleData.routeId || !scheduleData.busId) {
+        return res.status(400).json({
+          success: false,
+          message: "routeId và busId là bắt buộc",
+        });
+      }
 
-    // 1️⃣ Lấy thông tin xe để lấy `defaultSeatLayoutId`
-    const busRef = db.collection("buses").doc(scheduleData.busId);
-    const busDoc = await busRef.get();
-    if (!busDoc.exists) {
-      return res.status(400).json({
-        success: false,
-        message: "Không tìm thấy xe",
-      });
-    }
+      const busRef = db.collection("buses").doc(scheduleData.busId);
+      const busDoc = await busRef.get();
+      if (!busDoc.exists) {
+        return res.status(400).json({
+          success: false,
+          message: "Không tìm thấy xe",
+        });
+      }
 
-    const busData = busDoc.data();
-    if (!busData.defaultSeatLayoutId) {
-      return res.status(400).json({
-        success: false,
-        message: "Xe không có sơ đồ ghế mặc định",
-      });
-    }
+      const busData = busDoc.data();
+      if (!busData.defaultSeatLayoutId) {
+        return res.status(400).json({
+          success: false,
+          message: "Xe không có sơ đồ ghế mặc định",
+        });
+      }
 
-    // 2️⃣ Lấy dữ liệu sơ đồ ghế gốc từ `defaultSeatLayoutId`
-    const defaultSeatLayoutRef = db.collection("seatLayouts").doc(busData.defaultSeatLayoutId);
-    const defaultSeatLayoutDoc = await defaultSeatLayoutRef.get();
-    if (!defaultSeatLayoutDoc.exists) {
-      return res.status(400).json({
-        success: false,
-        message: "Không tìm thấy sơ đồ ghế mặc định của xe",
-      });
-    }
+      const defaultSeatLayoutRef = db.collection("seatLayouts").doc(busData.defaultSeatLayoutId);
+      const defaultSeatLayoutDoc = await defaultSeatLayoutRef.get();
+      if (!defaultSeatLayoutDoc.exists) {
+        return res.status(400).json({
+          success: false,
+          message: "Không tìm thấy sơ đồ ghế mặc định của xe",
+        });
+      }
 
-    const defaultSeatLayoutData = defaultSeatLayoutDoc.data();
+      const defaultSeatLayoutData = defaultSeatLayoutDoc.data();
 
-    // 3️⃣ Tạo một bản sao của sơ đồ ghế với ID mới
-    const newSeatLayoutRef = db.collection("seatLayouts").doc();
-    const newSeatLayoutData = {
-      ...defaultSeatLayoutData,
-      scheduleId: "", // Cập nhật sau khi có `scheduleId`
-      busId: scheduleData.busId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      const newSeatLayoutRef = db.collection("seatLayouts").doc();
+      const newSeatLayoutData = {
+        ...defaultSeatLayoutData,
+        scheduleId: "", // Cập nhật sau khi có `scheduleId`
+        busId: scheduleData.busId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-    await newSeatLayoutRef.set(newSeatLayoutData);
+      await newSeatLayoutRef.set(newSeatLayoutData);
 
-    // 4️⃣ Tạo lịch trình mới và liên kết với sơ đồ ghế mới
-    const scheduleRef = db.collection("schedules").doc();
-    const scheduleDocData = {
-      routeId: scheduleData.routeId,
-      busId: scheduleData.busId,
-      departureTime: scheduleData.departureTime || null,
-      arrivalTime: scheduleData.arrivalTime || null,
-      price: scheduleData.price ? String(scheduleData.price) : "0",
-      status: scheduleData.status || "upcoming",
-      seatLayoutId: newSeatLayoutRef.id, // Gán ID sơ đồ ghế mới
-      id: scheduleRef.id,
-      vendorId: scheduleData.vendorId
-    };
-
-    // 5️⃣ Cập nhật `scheduleId` vào sơ đồ ghế mới
-    await newSeatLayoutRef.update({ scheduleId: scheduleRef.id });
-
-    // 6️⃣ Lưu lịch trình vào Firestore
-    await scheduleRef.set(scheduleDocData);
-
-    res.status(201).json({
-      success: true,
-      data: {
+      const scheduleRef = db.collection("schedules").doc();
+      const scheduleDocData = {
+        routeId: scheduleData.routeId,
+        busId: scheduleData.busId,
+        departureTime: scheduleData.departureTime || null,
+        arrivalTime: scheduleData.arrivalTime || null,
+        price: scheduleData.price ? String(scheduleData.price) : "0",
+        status: scheduleData.status || "upcoming",
+        seatLayoutId: newSeatLayoutRef.id, // Gán ID sơ đồ ghế mới
         id: scheduleRef.id,
-        ...scheduleDocData,
-      },
-    });
-  } catch (error) {
-    console.error("Lỗi khi tạo lịch trình:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-},
+        vendorId: scheduleData.vendorId
+      };
 
-  
+      await newSeatLayoutRef.update({ scheduleId: scheduleRef.id });
 
-// Cập nhật lịch trình
-updateSchedule: async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
+      await scheduleRef.set(scheduleDocData);
 
-    if (!id) {
-      return res.status(400).json({
+      res.status(201).json({
+        success: true,
+        data: {
+          id: scheduleRef.id,
+          ...scheduleDocData,
+        },
+      });
+    } catch (error) {
+      console.error("Lỗi khi tạo lịch trình:", error);
+      res.status(500).json({
         success: false,
-        message: 'ID lịch trình là bắt buộc'
+        message: error.message,
       });
     }
+  },
 
-    const scheduleRef = db.collection('schedules').doc(id);
-    const scheduleDoc = await scheduleRef.get();
 
-    if (!scheduleDoc.exists) {
-      return res.status(404).json({
+
+  // Cập nhật lịch trình
+  updateSchedule: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID lịch trình là bắt buộc'
+        });
+      }
+
+      const scheduleRef = db.collection('schedules').doc(id);
+      const scheduleDoc = await scheduleRef.get();
+
+      if (!scheduleDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy lịch trình'
+        });
+      }
+
+      const scheduleUpdate = {
+        price: updateData.price ? String(updateData.price) : String(scheduleDoc.data().price) || '0', // Chuyển đổi price thành string
+        status: updateData.status || scheduleDoc.data().status,
+        updatedAt: new Date().toISOString()
+      };
+
+      await scheduleRef.update(scheduleUpdate);
+
+      res.json({
+        success: true,
+        message: 'Cập nhật lịch trình thành công'
+      });
+    } catch (error) {
+      console.error('Error updating schedule:', error);
+      res.status(500).json({
         success: false,
-        message: 'Không tìm thấy lịch trình'
+        message: error.message
       });
     }
-
-    const scheduleUpdate = {
-      price: updateData.price ? String(updateData.price) : String(scheduleDoc.data().price) || '0', // Chuyển đổi price thành string
-      status: updateData.status || scheduleDoc.data().status,
-      updatedAt: new Date().toISOString()
-    };
-
-    await scheduleRef.update(scheduleUpdate);
-
-    res.json({
-      success: true,
-      message: 'Cập nhật lịch trình thành công'
-    });
-  } catch (error) {
-    console.error('Error updating schedule:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-},
-
-
-  // // Tạo lịch trình mới
-  // createSchedule: async (req, res) => {
-  //   try {
-  //     const scheduleData = req.body;
-  //     if (!scheduleData.routeId || !scheduleData.busId) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: 'routeId và busId là bắt buộc'
-  //       });
-  //     }
-
-  //     // 1. Lấy thông tin xe và seatLayout mặc định
-  //     const busRef = db.collection('buses').doc(scheduleData.busId);
-  //     const busDoc = await busRef.get();
-
-  //     if (!busDoc.exists) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: 'Không tìm thấy xe'
-  //       });
-  //     }
-
-  //     const busData = busDoc.data();
-  //     // Kiểm tra defaultSeatLayoutId
-  //     if (!busData.defaultSeatLayoutId) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: 'Xe không có cấu hình ghế mặc định'
-  //       });
-  //     }
-
-  //     const defaultSeatLayoutRef = db.collection('seatLayouts').doc(busData.defaultSeatLayoutId);
-  //     const defaultSeatLayout = await defaultSeatLayoutRef.get();
-
-  //     if (!defaultSeatLayout.exists) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: 'Không tìm thấy cấu hình ghế của xe'
-  //       });
-  //     }
-
-  //     // 2. Tạo bản sao của seatLayout cho lịch trình này
-  //     const scheduleSeatLayoutRef = db.collection('seatLayouts').doc();
-  //     const defaultSeatLayoutData = defaultSeatLayout.data();
-      
-  //     // Tạo dữ liệu ghế mới dựa trên mẫu, với giá và trạng thái mới
-  //     const seatLayoutData = {
-  //       floor1: {},
-  //       floor2: {},
-  //       busId: scheduleData.busId,
-  //       scheduleId: '', // Sẽ được cập nhật sau
-  //       defaultPriceFloor1: scheduleData.defaultPriceFloor1 || defaultSeatLayoutData.defaultPriceFloor1,
-  //       defaultPriceFloor2: scheduleData.defaultPriceFloor2 || defaultSeatLayoutData.defaultPriceFloor2,
-  //       createdAt: new Date().toISOString(),
-  //       updatedAt: new Date().toISOString()
-  //     };
-
-  //     // Xử lý ghế tầng 1
-  //     if (defaultSeatLayoutData.floor1) {
-  //       Object.entries(defaultSeatLayoutData.floor1).forEach(([key, seat]) => {
-  //         const customSeat = scheduleData.seatLayout?.floor1?.[key] || {};
-  //         seatLayoutData.floor1[key] = {
-  //           isBooked: customSeat.isBooked || false,
-  //           bookedBy: customSeat.bookedBy || null,
-  //           price: Number(customSeat.price) || Number(scheduleData.defaultPriceFloor1) || seat.price,
-  //           type: seat.type || 'normal'
-  //         };
-  //       });
-  //     }
-
-  //     // Xử lý ghế tầng 2
-  //     if (defaultSeatLayoutData.floor2) {
-  //       Object.entries(defaultSeatLayoutData.floor2).forEach(([key, seat]) => {
-  //         const customSeat = scheduleData.seatLayout?.floor2?.[key] || {};
-  //         seatLayoutData.floor2[key] = {
-  //           isBooked: customSeat.isBooked || false,
-  //           bookedBy: customSeat.bookedBy || null,
-  //           price: Number(customSeat.price) || Number(scheduleData.defaultPriceFloor2) || seat.price,
-  //           type: seat.type || 'normal'
-  //         };
-  //       });
-  //     }
-
-  //     // 3. Tạo document cho schedule
-  //     const scheduleRef = db.collection('schedules').doc();
-  //     const scheduleDocData = {
-  //       routeId: scheduleData.routeId,
-  //       busId: scheduleData.busId,
-  //       departureTime: scheduleData.departureTime || null,
-  //       arrivalTime: scheduleData.arrivalTime || null,
-  //       price: scheduleData.price || 0,
-  //       status: scheduleData.status || 'upcoming',
-  //       seatLayoutId: scheduleSeatLayoutRef.id,
-  //     };
-
-  //     // 4. Thực hiện batch write
-  //     const batch = db.batch();
-  //     seatLayoutData.scheduleId = scheduleRef.id; // Cập nhật scheduleId cho seatLayout
-  //     batch.set(scheduleSeatLayoutRef, seatLayoutData);
-  //     batch.set(scheduleRef, scheduleDocData);
-  //     await batch.commit();
-
-  //     // 5. Trả về response với dữ liệu đầy đủ
-  //     const responseData = {
-  //       id: scheduleRef.id,
-  //       ...scheduleDocData,
-  //       seatLayout: seatLayoutData
-  //     };
-
-  //     res.status(201).json({
-  //       success: true,
-  //       data: responseData
-  //     });
-  //   } catch (error) {
-  //     console.error('Error creating schedule:', error);
-  //     res.status(500).json({
-  //       success: false,
-  //       message: error.message
-  //     });
-  //   }
-  // },
-
-  // // Cập nhật lịch trình
-  // updateSchedule: async (req, res) => {
-  //   try {
-  //     const { id } = req.params;
-  //     const updateData = req.body;
-
-  //     if (!id) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: 'ID lịch trình là bắt buộc'
-  //       });
-  //     }
-
-  //     // 1. Lấy thông tin schedule hiện tại
-  //     const scheduleRef = db.collection('schedules').doc(id);
-  //     const scheduleDoc = await scheduleRef.get();
-
-  //     if (!scheduleDoc.exists) {
-  //       return res.status(404).json({
-  //         success: false,
-  //         message: 'Không tìm thấy lịch trình'
-  //       });
-  //     }
-
-  //     const currentSchedule = scheduleDoc.data();
-
-  //     // 2. Cập nhật seatLayout nếu có thay đổi về giá hoặc trạng thái đặt chỗ
-  //     if (updateData.seatLayout) {
-  //       const seatLayoutRef = db.collection('seatLayouts').doc(currentSchedule.seatLayoutId);
-  //       const currentSeatLayout = await seatLayoutRef.get();
-        
-  //       if (!currentSeatLayout.exists) {
-  //         return res.status(404).json({
-  //           success: false,
-  //           message: 'Không tìm thấy cấu hình ghế của lịch trình'
-  //         });
-  //       }
-
-  //       const currentSeatLayoutData = currentSeatLayout.data();
-  //       const updates = {};
-
-  //       // Cập nhật thông tin ghế tầng 1
-  //       if (updateData.seatLayout.floor1) {
-  //         Object.entries(updateData.seatLayout.floor1).forEach(([key, seat]) => {
-  //           if (!currentSeatLayoutData.floor1[key]) return;
-            
-  //           // Cập nhật tất cả các trường của ghế nếu có thay đổi
-  //           if (seat.price !== undefined) {
-  //             updates[`floor1.${key}.price`] = Number(seat.price);
-  //           }
-  //           if (seat.type !== undefined) {
-  //             updates[`floor1.${key}.type`] = seat.type;
-  //           }
-  //           if (seat.isBooked !== undefined) {
-  //             updates[`floor1.${key}.isBooked`] = seat.isBooked;
-  //           }
-  //           if (seat.bookedBy !== undefined) {
-  //             updates[`floor1.${key}.bookedBy`] = seat.bookedBy;
-  //           }
-  //         });
-  //       }
-
-  //       // Cập nhật thông tin ghế tầng 2
-  //       if (updateData.seatLayout.floor2) {
-  //         Object.entries(updateData.seatLayout.floor2).forEach(([key, seat]) => {
-  //           if (!currentSeatLayoutData.floor2[key]) return;
-            
-  //           // Cập nhật tất cả các trường của ghế nếu có thay đổi
-  //           if (seat.price !== undefined) {
-  //             updates[`floor2.${key}.price`] = Number(seat.price);
-  //           }
-  //           if (seat.type !== undefined) {
-  //             updates[`floor2.${key}.type`] = seat.type;
-  //           }
-  //           if (seat.isBooked !== undefined) {
-  //             updates[`floor2.${key}.isBooked`] = seat.isBooked;
-  //           }
-  //           if (seat.bookedBy !== undefined) {
-  //             updates[`floor2.${key}.bookedBy`] = seat.bookedBy;
-  //           }
-  //         });
-  //       }
-
-  //       // Chỉ cập nhật nếu có thay đổi
-  //       if (Object.keys(updates).length > 0) {
-  //         updates.updatedAt = new Date().toISOString();
-  //         await seatLayoutRef.update(updates);
-  //       }
-  //     }
-
-  //     // 3. Cập nhật thông tin schedule
-  //     const scheduleUpdate = {
-  //       routeId: updateData.routeId || currentSchedule.routeId,
-  //       busId: updateData.busId || currentSchedule.busId,
-  //       departureTime: updateData.departureTime || currentSchedule.departureTime,
-  //       arrivalTime: updateData.arrivalTime || currentSchedule.arrivalTime,
-  //       price: Number(updateData.price) || currentSchedule.price,
-  //       status: updateData.status || currentSchedule.status,
-  //       updatedAt: new Date().toISOString()
-  //     };
-
-  //     await scheduleRef.update(scheduleUpdate);
-
-  //     // 4. Lấy dữ liệu đã cập nhật
-  //     const updatedSchedule = await scheduleRef.get();
-  //     const updatedSeatLayout = await db.collection('seatLayouts')
-  //       .doc(currentSchedule.seatLayoutId)
-  //       .get();
-
-  //     // Lấy thêm thông tin route và bus
-  //     let routeData = null;
-  //     let busData = null;
-  //     const scheduleData = updatedSchedule.data();
-
-  //     if (scheduleData.routeId) {
-  //       const routeDoc = await db.collection('routes').doc(scheduleData.routeId).get();
-  //       if (routeDoc.exists) {
-  //         routeData = {
-  //           id: routeDoc.id,
-  //           ...routeDoc.data()
-  //         };
-  //       }
-  //     }
-
-  //     if (scheduleData.busId) {
-  //       const busDoc = await db.collection('buses').doc(scheduleData.busId).get();
-  //       if (busDoc.exists) {
-  //         busData = {
-  //           id: busDoc.id,
-  //           ...busDoc.data()
-  //         };
-  //       }
-  //     }
-
-  //     const responseData = {
-  //       id: updatedSchedule.id,
-  //       ...scheduleData,
-  //       route: routeData,
-  //       bus: busData,
-  //       seatLayout: {
-  //         ...updatedSeatLayout.data(),
-  //         floor1: updatedSeatLayout.data().floor1 || {},
-  //         floor2: updatedSeatLayout.data().floor2 || {}
-  //       }
-  //     };
-
-  //     res.json({
-  //       success: true,
-  //       data: responseData
-  //     });
-  //   } catch (error) {
-  //     console.error('Error updating schedule:', error);
-  //     res.status(500).json({
-  //       success: false,
-  //       message: error.message
-  //     });
-  //   }
-  // },
+  },
 
   // Xóa lịch trình
   deleteSchedule: async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       if (!id) {
         return res.status(400).json({
           success: false,
@@ -606,6 +424,61 @@ updateSchedule: async (req, res) => {
         success: false,
         message: error.message
       });
+    }
+  },
+
+  updateTimeSchedule: async (req, res) => {
+    try {
+      const scheduleRef = db.collection("schedules");
+      const scheduleSnapshot = await scheduleRef.get();
+
+      const now = new Date();
+      const vnToday = new Date(now.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }));
+      const todayStartVN = new Date(`${vnToday.toISOString().slice(0, 10)}T00:00:00+07:00`);
+
+      let updatedCount = 0;
+
+      for (const doc of scheduleSnapshot.docs) {
+        const data = doc.data();
+
+        const departureTime = data.departureTime?.toDate?.() || new Date(data.departureTime);
+        const arrivalTime = data.arrivalTime?.toDate?.() || new Date(data.arrivalTime);
+
+        if (!departureTime || !arrivalTime) continue;
+
+        const updates = {};
+
+        // ====== Kiểm tra và update departureTime nếu cần
+        const depDateVN = new Date(departureTime.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }));
+        if (depDateVN < todayStartVN) {
+          const newDeparture = new Date(todayStartVN);
+          newDeparture.setHours(departureTime.getHours(), departureTime.getMinutes(), 0, 0);
+
+          // Format thành chuỗi có timezone +07:00
+          const isoDeparture = format(newDeparture, "yyyy-MM-dd'T'HH:mm:ssXXX", { timeZone: 'Asia/Ho_Chi_Minh' });
+          updates.departureTime = isoDeparture;
+        }
+
+        // ====== Kiểm tra và update arrivalTime nếu cần
+        const arrDateVN = new Date(arrivalTime.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }));
+        if (arrDateVN < todayStartVN) {
+          const newArrival = new Date(todayStartVN);
+          newArrival.setHours(arrivalTime.getHours(), arrivalTime.getMinutes(), 0, 0);
+
+          const isoArrival = format(newArrival, "yyyy-MM-dd'T'HH:mm:ssXXX", { timeZone: 'Asia/Ho_Chi_Minh' });
+          updates.arrivalTime = isoArrival;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await scheduleRef.doc(doc.id).update(updates);
+          updatedCount++;
+        }
+      }
+
+      res.status(200).json({ message: `Updated ${updatedCount} schedule(s)` });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Failed to update schedules', error: error.message });
     }
   }
 };

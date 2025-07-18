@@ -10,6 +10,7 @@ const paymentRoutes = require('./paymentRoutes');
 const userRoutes = require('./userRoutes');
 const historyRoutes = require('./historyRoutes');
 const driverRoutes = require('./driverRoutes');
+const vendorRoutes = require('./vendorRoutes');
 
 // Mount các routes
 router.use('/routes', routeRoutes);
@@ -21,5 +22,6 @@ router.use('/payment', paymentRoutes);
 router.use('/user', userRoutes);
 router.use('/history', historyRoutes);
 router.use('/driver', driverRoutes);
+router.use('/vendor', vendorRoutes);
 
 module.exports = router;
