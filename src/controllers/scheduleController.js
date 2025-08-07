@@ -1,6 +1,6 @@
 const { log } = require('firebase-functions/logger');
 const { db } = require('../config/firebase');
-const { format } = require('date-fns-tz');
+const { getHours, getMinutes, format } = require('date-fns-tz');
 
 const scheduleController = {
   // Lấy danh sách lịch trình
@@ -444,7 +444,7 @@ const scheduleController = {
         const departureTime = data.departureTime?.toDate?.() || new Date(data.departureTime);
         const arrivalTime = data.arrivalTime?.toDate?.() || new Date(data.arrivalTime);
 
-        if (!departureTime || !arrivalTime) continue;
+        if (!departureTime || !arrivalTime || data.status === 'completed') continue;
 
         const updates = {};
 
@@ -452,10 +452,13 @@ const scheduleController = {
         const depDateVN = new Date(departureTime.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }));
         if (depDateVN < todayStartVN) {
           const newDeparture = new Date(todayStartVN);
-          newDeparture.setHours(departureTime.getHours(), departureTime.getMinutes(), 0, 0);
+          const hourVN = getHours(departureTime, { timeZone: 'Asia/Ho_Chi_Minh' });
+          const minuteVN = getMinutes(departureTime, { timeZone: 'Asia/Ho_Chi_Minh' });
+          newDeparture.setHours(hourVN, minuteVN, 0, 0);
 
-          // Format thành chuỗi có timezone +07:00
-          const isoDeparture = format(newDeparture, "yyyy-MM-dd'T'HH:mm:ssXXX", { timeZone: 'Asia/Ho_Chi_Minh' });
+          const isoDeparture = format(newDeparture, "yyyy-MM-dd'T'HH:mm:ssXXX", {
+            timeZone: 'Asia/Ho_Chi_Minh'
+          });
           updates.departureTime = isoDeparture;
         }
 
@@ -463,9 +466,13 @@ const scheduleController = {
         const arrDateVN = new Date(arrivalTime.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }));
         if (arrDateVN < todayStartVN) {
           const newArrival = new Date(todayStartVN);
-          newArrival.setHours(arrivalTime.getHours(), arrivalTime.getMinutes(), 0, 0);
+          const hourVN = getHours(arrivalTime, { timeZone: 'Asia/Ho_Chi_Minh' });
+          const minuteVN = getMinutes(arrivalTime, { timeZone: 'Asia/Ho_Chi_Minh' });
+          newArrival.setHours(hourVN, minuteVN, 0, 0);
 
-          const isoArrival = format(newArrival, "yyyy-MM-dd'T'HH:mm:ssXXX", { timeZone: 'Asia/Ho_Chi_Minh' });
+          const isoArrival = format(newArrival, "yyyy-MM-dd'T'HH:mm:ssXXX", {
+            timeZone: 'Asia/Ho_Chi_Minh'
+          });
           updates.arrivalTime = isoArrival;
         }
 
@@ -478,7 +485,10 @@ const scheduleController = {
       res.status(200).json({ message: `Updated ${updatedCount} schedule(s)` });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ message: 'Failed to update schedules', error: error.message });
+      res.status(500).json({
+        message: 'Failed to update schedules',
+        error: error.message
+      });
     }
   }
 };
