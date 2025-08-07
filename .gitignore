@@ -1,2 +1,56 @@
+# Node modules
+node_modules/
 
-.codegpt
+# Firebase functions
+functions/node_modules/
+functions/lib/
+functions/.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# dotenv files
+.env
+.env.* 
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
+
+# Build and temp folders
+dist/
+build/
+tmp/
+temp/
+.cache/
+
+# Firebase cache and artifacts
+.firebase/
+.firebaserc
+.firebase-debug.log
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# PM2 logs (if using PM2)
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# TypeScript (if using)
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Others
+*.tgz
+*.firebase-adminsdk-*.json

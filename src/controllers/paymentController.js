@@ -20,13 +20,13 @@ const paymentController = {
   createPaymentUrl: async (req, res) => {
     process.env.TZ = "Asia/Ho_Chi_Minh";
     const { orderId, amount, orderInfo, updatedPaymentData } = req.body;
-    
-    console.log("🛒 Payment request body:", req.body);
+    console.log("updatedPaymentData", updatedPaymentData);
+
 
     const numericAmount = parseInt(amount.replace(/\D/g, ""), 10);
     const createDate = moment().format("YYYYMMDDHHmmss");
     const expireDate = moment().add(15, "minutes").format("YYYYMMDDHHmmss");
-    
+
     let vnp_Params = {
       vnp_Version: "2.1.0",
       vnp_Command: "pay",
@@ -62,8 +62,8 @@ const paymentController = {
       customerId: updatedPaymentData.userData.uid,
       customerInfo: updatedPaymentData.userData.phoneNumber,
       departureTime: updatedPaymentData.selectedSchedule.departureTime,
-      from: updatedPaymentData.selectedSchedule.route.startPoint,
-      to: updatedPaymentData.selectedSchedule.route.endPoint,
+      from: updatedPaymentData.route.startPoint,
+      to: updatedPaymentData.route.endPoint,
       price: numericAmount,
       routeId: updatedPaymentData.routeId,
       scheduleId: updatedPaymentData.selectedSchedule.id,
@@ -112,7 +112,7 @@ const paymentController = {
 
         let seatLayoutData = seatLayoutDoc.data();
         const bookedSeats = ticketData.seatNumber;
-        const customerName = ticketData.customerName; 
+        const customerName = ticketData.customerName;
         const customerPhoneNumber = ticketData.customerInfo;
 
         console.log("🔄 Cập nhật sơ đồ ghế:", bookedSeats);
