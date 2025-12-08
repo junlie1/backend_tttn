@@ -16,6 +16,21 @@ function sortParams(obj) {
   return sortedObj;
 }
 
+function buildSignData(obj) {
+  const sorted = sortParams(obj);
+  const keyVals = [];
+
+  for (const [key, value] of Object.entries(sorted)) {
+    if (value !== "" && value !== undefined && value !== null) {
+      keyVals.push(
+        `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`
+      );
+    }
+  }
+
+  return keyVals.join("&");
+}
+
 const paymentController = {
   createPaymentUrl: async (req, res) => {
     process.env.TZ = "Asia/Ho_Chi_Minh";
@@ -34,7 +49,7 @@ const paymentController = {
       vnp_Locale: "vn",
       vnp_CurrCode: "VND",
       vnp_TxnRef: orderId,
-      vnp_OrderInfo: orderInfo,
+      vnp_OrderInfo: "Thanhtoan",
       vnp_OrderType: "other",
       vnp_Amount: numericAmount * 100,
       vnp_ReturnUrl: process.env.VNP_RETURN_URL,
@@ -43,16 +58,20 @@ const paymentController = {
       vnp_ExpireDate: expireDate,
     };
 
-    const sortedParams = sortParams(vnp_Params);
-    const querystring = new URLSearchParams(sortedParams).toString();
-    const signed = crypto.createHmac("sha512", process.env.VNP_HASH_SECRET)
-      .update(querystring)
-      .digest("hex");
+    const signData = buildSignData(vnp_Params);
+    const signed = crypto
+      .createHmac("sha512", process.env.VNP_HASH_SECRET)
+      .update(Buffer.from(signData, "utf-8"))
+      .digest("hex")
+      .toUpperCase();   // ⬅️ thêm cái này
 
     vnp_Params.vnp_SecureHash = signed;
     const paymentUrl = `${process.env.VNP_URL}?${new URLSearchParams(vnp_Params).toString()}`;
-
-    // 🔹 **Lưu vé vào Firestore ngay tại đây**
+    console.log("TMN =", process.env.VNP_TMCODE);
+    console.log("HASH =", process.env.VNP_HASH_SECRET);
+    console.log("signData =", signData);
+    console.log("signed   =", signed);
+    console.log("paymentUrl =", paymentUrl);
     const formattedTicket = {
       orderId,
       arrivalTime: updatedPaymentData.selectedSchedule.arrivalTime,
@@ -168,10 +187,12 @@ const paymentController = {
       delete vnp_Params["vnp_SecureHash"];
       delete vnp_Params["vnp_SecureHashType"];
 
-      vnp_Params = sortParams(vnp_Params);
-      const signData = buildQuery(vnp_Params);
-      const hmac = crypto.createHmac("sha512", process.env.VNP_HASH_SECRET);
-      const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
+      const signData = buildSignData(vnp_Params);
+      const signed = crypto
+        .createHmac("sha512", process.env.VNP_HASH_SECRET)
+        .update(Buffer.from(signData, "utf-8"))
+        .digest("hex")
+        .toUpperCase();
 
       if (secureHash.trim().toLowerCase() === signed.trim().toLowerCase()) {
         return res.status(200).json({ RspCode: "00", Message: "Success" });
